@@ -21,7 +21,7 @@
 #  - Dateiname
 #  - Dateiname_ohne_Extension
 #  - Extension
-#  - Erstelldatum_Zeit_des_Mediums: Falls der Wert nicht exisitiert, wird das füheste Datum oder das Dateidatum verwendet
+#  - Erstelldatum_Zeit_des_Mediums: Falls der Wert nicht exisitiert, wird das füheste Datum oder das Dateidatum verwendet, dann wird eine Warnung ausgegeben
 #  - latitude
 #  - longitude
 #
