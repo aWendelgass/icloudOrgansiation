@@ -2,8 +2,8 @@
 # Skript zum Extrahieren von Medien-Metadaten mittels EXIFTOOL
 #
 # Das Skript gehört zu einem Set of 5: Wenn alles ordnungsgemäß abläuft 
-# könnt ihr damit eine beliebiege Verzeichnissttruktur  von Bild und 
-# Video Medien organsieren. Das heisst: Umbenennen, verschieben, 
+# könnt ihr damit eine beliebige Verzeichnisstruktur  von Bild und 
+# Video Medien organisieren. Das heisst: Umbenennen, verschieben, 
 # doppelte entfernen. 
 #
 # 1_Export-Media-Data.ps1
@@ -15,17 +15,17 @@
 #
 # Das Skript stellt Lat und Long Koordinaten zu einem Koordinatenpaar X#Y zusammen
 # Es wird eine CSV Datei erstellt: 1_Media-Export.csv
-# Diese besitzt die folgrenden Spalten
+# Diese besitzt die folgenden Spalten
 #
 #  - Pfad
 #  - Dateiname
 #  - Dateiname_ohne_Extension
 #  - Extension
-#  - Erstelldatum_Zeit_des_Mediums: Falls der Wert nicht exisitiert, wird das füheste Datum oder das Dateidatum verwendet, dann wird eine Warnung ausgegeben
+#  - Datumsstempel_fuer_Dateiname
 #  - latitude
 #  - longitude
 #
-# Die Ausgabedatei ist der Input für das nöchste Skriot: 2_Extrakt-Koordinatengruppen.ps1
+# Die Ausgabedatei ist der Input für das nächste Skript: 2_Extrakt-Koordinatengruppen.ps1
 #
 # ===================================================================
 
@@ -41,7 +41,7 @@ if (-not (Get-Command exiftool -ErrorAction SilentlyContinue)) {
 }
 
 Write-Host "Arbeitsordner ist: $Arbeitsordner" -ForegroundColor Green
-Write-Host "Die Ausgabatei wird sein: $Zieldatei_CSV" -ForegroundColor Green
+Write-Host "Die Ausgabedatei wird sein: $Zieldatei_CSV" -ForegroundColor Green
 
 $mediaExtensions = @("*.jpg", "*.jpeg", "*.heic", "*.png", "*.mov", "*.mp4")
 $dateien = Get-ChildItem -Path $Arbeitsordner -Recurse -File -Include $mediaExtensions
@@ -63,7 +63,7 @@ foreach ($datei in $dateien) {
     Write-Progress -Activity "Extrahiere Metadaten" -Status "Verarbeite $($datei.Name)" -PercentComplete (($zaehler / $gesamt) * 100)
 
     try {
-        $exifJson = exiftool -j -n -S -TrackCreateDate -DateTimeOriginal -CreateDate -FileModifyDate -GPSLatitude -GPSLongitude $datei.FullName
+        $exifJson = exiftool -j -n -S -charset utf8 -TrackCreateDate -DateTimeOriginal -CreateDate -FileModifyDate -GPSLatitude -GPSLongitude $datei.FullName
 
         if ($exifJson) {
             $meta = $exifJson | ConvertFrom-Json | Select-Object -First 1
@@ -112,17 +112,16 @@ foreach ($datei in $dateien) {
                 }
             }
 
-            # ======================= HIER IST DIE ÄNDERUNG =======================
+            # Create a single, pre-formatted date string that Excel will not misinterpret.
             $objekt = [PSCustomObject]@{
-                Pfad                         = $datei.DirectoryName # NEU: Der Pfad zum Ordner
-                Dateiname                    = $datei.Name           # NEU: Der vollständige Dateiname
-                Dateiname_ohne_Extension     = $datei.BaseName
-                Extension                    = $datei.Extension
-                Erstelldatum_Zeit_des_Mediums = $mediumErstelltDatum
-                latitude                     = $meta.GPSLatitude
-                longitude                    = $meta.GPSLongitude
+                Pfad                          = $datei.DirectoryName
+                Dateiname                     = $datei.Name
+                Dateiname_ohne_Extension      = $datei.BaseName
+                Extension                     = $datei.Extension
+                Datumsstempel_fuer_Dateiname  = if ($mediumErstelltDatum) { $mediumErstelltDatum.ToString("yyyyMMdd_HHmmss") } else { "" }
+                latitude                      = $meta.GPSLatitude
+                longitude                     = $meta.GPSLongitude
             }
-            # =====================================================================
             
             $ergebnisliste.Add($objekt)
         }
@@ -132,11 +131,5 @@ foreach ($datei in $dateien) {
 }
 
 Write-Host "Verarbeitung abgeschlossen. Speichere Ergebnisse..." -ForegroundColor Green
-# FINALE KORREKTUR: Formatiere alle Datumsobjekte einheitlich beim Export
-$ergebnisliste | ForEach-Object {
-    if ($_.Erstelldatum_Zeit_des_Mediums -is [datetime]) {
-        $_.Erstelldatum_Zeit_des_Mediums = $_.Erstelldatum_Zeit_des_Mediums.ToString("yyyy-MM-dd HH:mm:ss")
-    }
-    $_
-} | Export-Csv -Path $Zieldatei_CSV -Delimiter ';' -NoTypeInformation -Encoding UTF8
+$ergebnisliste | Export-Csv -Path $Zieldatei_CSV -Delimiter ';' -NoTypeInformation -Encoding UTF8
 Write-Host "Fertig! Die Datei '$Zieldatei_CSV' wurde erfolgreich erstellt." -ForegroundColor Cyan
