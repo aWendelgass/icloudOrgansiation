@@ -27,8 +27,6 @@
 #
 # Die Ausgabedatei ist der Input für das nöchste Skriot: 2_Extrakt-Koordinatengruppen.ps1
 #
-#  Für 70.000 Mediendateien dauerte der Vorgang bei mir ca 3 Stunden. 
-#
 # ===================================================================
 
 # Dynamische Pfadermittlung über den Speicherort des Skripts
