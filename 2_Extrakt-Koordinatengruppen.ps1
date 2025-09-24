@@ -37,16 +37,34 @@
 # Die Ausgabedatei ist der Input für das nöchste Skript: 3_Fetch-Adressen.ps1
 
 
-#region Konfiguration
+# --- Konfiguration ---
+$SkriptName = "Skript 2: Koordinaten-Gruppen Extraktion"
 $InputCsv_Full = Join-Path -Path $PSScriptRoot -ChildPath "1_Media-Export.csv"
 $OutputCsv_Unique = Join-Path -Path $PSScriptRoot -ChildPath "2_Koordinaten-Export.csv"
-#endregion
 
-Write-Host "Lese große Datendatei ein..."
-$fullData = Import-Csv -Path $InputCsv_Full -Delimiter ';'
+# --- Lade Logging Modul ---
+try {
+    Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath "MediaWorkflowLogger.psm1")
+} catch {
+    Write-Host "FEHLER: Das Logging-Modul 'MediaWorkflowLogger.psm1' konnte nicht geladen werden." -ForegroundColor Red
+    pause
+    return
+}
+
+# --- Skript-Logik ---
+
+Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Lese grosse Datendatei ein: $InputCsv_Full"
+try {
+    $fullData = Import-Csv -Path $InputCsv_Full -Delimiter ';'
+} catch {
+    Write-StructuredLog -LogLevel ERROR -SkriptName $SkriptName -Message "Fehler beim Einlesen der CSV-Datei: $($_.Exception.Message)"
+    pause
+    return
+}
+
 
 $uniqueKeys = @{}
-Write-Host "Analysiere $($fullData.Count) Datensätze..."
+Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Analysiere $($fullData.Count) Datensaetze..."
 foreach ($row in $fullData) {
     if ($row.latitude -and $row.longitude -and $row.latitude -ne "") {
         # FINALE LOGIK: Normalisiert den Input (ersetzt Komma durch Punkt) und arbeitet dann nur noch mit Text.
@@ -55,7 +73,7 @@ foreach ($row in $fullData) {
 
         if ($latNormalized.Contains('.')) {
             $latParts = $latNormalized.Split('.')
-            # Baut den finalen Schlüssel mit Komma wieder zusammen
+            # Baut den finalen Schluessel mit Komma wieder zusammen
             $latRounded = $latParts[0] + "," + $latParts[1].PadRight(5, '0').Substring(0, 5)
 
             $lonParts = $lonNormalized.Split('.')
@@ -68,6 +86,8 @@ foreach ($row in $fullData) {
 }
 $resultList = [System.Collections.Generic.List[object]]::new()
 foreach($key in $uniqueKeys.Keys) { $resultList.Add([PSCustomObject]@{ LATLONG = $key }) }
-Write-Host "$($resultList.Count) einzigartige Koordinaten gefunden. Speichere..."
+
+Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "$($resultList.Count) einzigartige Koordinaten gefunden. Speichere..."
 $resultList | Export-Csv -Path $OutputCsv_Unique -Delimiter ';' -NoTypeInformation -Encoding UTF8
-Write-Host "Fertig!" -ForegroundColor Green
+Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Fertig! Datei '$OutputCsv_Unique' wurde erstellt."
+pause

@@ -29,31 +29,49 @@
 #
 # ===================================================================
 
-# Dynamische Pfadermittlung über den Speicherort des Skripts
+
+
+# --- Konfiguration ---
+$SkriptName = "Skript 1: Media-Daten Export"
 $Arbeitsordner = $PSScriptRoot
 $Zieldatei_CSV = Join-Path -Path $Arbeitsordner -ChildPath "1_Media-Export.csv"
 
-# ExifTool-Prüfung
-if (-not (Get-Command exiftool -ErrorAction SilentlyContinue)) {
-    Write-Host "FEHLER: exiftool.exe wurde nicht gefunden." -ForegroundColor Red
+# --- Lade Logging Modul ---
+try {
+    Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath "MediaWorkflowLogger.psm1")
+} catch {
+    Write-Host "FEHLER: Das Logging-Modul 'MediaWorkflowLogger.psm1' konnte nicht geladen werden." -ForegroundColor Red
     pause
     return
 }
 
-Write-Host "Arbeitsordner ist: $Arbeitsordner" -ForegroundColor Green
-Write-Host "Die Ausgabedatei wird sein: $Zieldatei_CSV" -ForegroundColor Green
+# --- Skript-Logik ---
+
+# Setze Konsolen-Encoding auf UTF-8, um die Ausgabe von externen Tools korrekt zu lesen
+[System.Console]::InputEncoding = [System.Text.Encoding]::UTF8
+[System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# ExifTool-Pruefung
+if (-not (Get-Command exiftool -ErrorAction SilentlyContinue)) {
+    Write-StructuredLog -LogLevel ERROR -SkriptName $SkriptName -Message "exiftool.exe wurde nicht gefunden."
+    pause
+    return
+}
+
+Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Arbeitsordner ist: $Arbeitsordner"
+Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Die Ausgabedatei wird sein: $Zieldatei_CSV"
 
 $mediaExtensions = @("*.jpg", "*.jpeg", "*.heic", "*.png", "*.mov", "*.mp4")
 $dateien = Get-ChildItem -Path $Arbeitsordner -Recurse -File -Include $mediaExtensions
 $ergebnisliste = [System.Collections.Generic.List[object]]::new()
 
 if ($dateien.Count -eq 0) {
-    Write-Warning "Es wurden keine passenden Mediendateien im Ordner gefunden."
+    Write-StructuredLog -LogLevel WARN -SkriptName $SkriptName -Message "Es wurden keine passenden Mediendateien im Ordner gefunden."
     pause
     return
 }
 
-Write-Host "Es wurden $($dateien.Count) Dateien gefunden. Beginne mit der Verarbeitung..."
+Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Es wurden $($dateien.Count) Dateien gefunden. Beginne mit der Verarbeitung..."
 
 $zaehler = 0
 $gesamt = $dateien.Count
@@ -70,28 +88,21 @@ foreach ($datei in $dateien) {
             $mediumErstelltDatum = $null
             $dateString = $null
 
-            # Priorität 1: Die "goldenen" EXIF-Tags
-            if ($meta.TrackCreateDate) {
-                $dateString = $meta.TrackCreateDate
-            } elseif ($meta.DateTimeOriginal) {
-                $dateString = $meta.DateTimeOriginal
-            } elseif ($meta.CreateDate) {
-                $dateString = $meta.CreateDate
-            }
+            if ($meta.TrackCreateDate) { $dateString = $meta.TrackCreateDate }
+            elseif ($meta.DateTimeOriginal) { $dateString = $meta.DateTimeOriginal }
+            elseif ($meta.CreateDate) { $dateString = $meta.CreateDate }
 
             if ($dateString) {
-                # Konvertiere den EXIF-String in ein Objekt
                 try {
                     $datePart = $dateString.Substring(0, 10).Replace(':', '-')
                     $timePart = $dateString.Substring(11)
                     $cleanDateString = "$datePart $timePart"
                     $mediumErstelltDatum = [datetime]$cleanDateString
                 } catch {
-                    Write-Warning "Konnte primäres Datumsformat '$dateString' für Datei $($datei.Name) nicht verarbeiten."
+                    Write-StructuredLog -LogLevel WARN -SkriptName $SkriptName -Message "Konnte primaeres Datumsformat '$dateString' nicht verarbeiten." -FileObject $datei
                 }
             }
             
-            # Fallback, wenn kein primäres Datum gefunden oder konvertiert werden konnte
             if (-not $mediumErstelltDatum) {
                 $modifyDateString = $meta.FileModifyDate
                 $createDateObject = $datei.CreationTime
@@ -107,12 +118,11 @@ foreach ($datei in $dateien) {
                             $mediumErstelltDatum = $modifyDateObject
                         }
                     } catch {
-                        Write-Warning "Konnte Fallback-Datumsformat '$modifyDateString' für Datei $($datei.Name) nicht verarbeiten."
+                        Write-StructuredLog -LogLevel WARN -SkriptName $SkriptName -Message "Konnte Fallback-Datumsformat '$modifyDateString' nicht verarbeiten." -FileObject $datei
                     }
                 }
             }
 
-            # Create a single, pre-formatted date string that Excel will not misinterpret.
             $objekt = [PSCustomObject]@{
                 Pfad                          = $datei.DirectoryName
                 Dateiname                     = $datei.Name
@@ -126,10 +136,11 @@ foreach ($datei in $dateien) {
             $ergebnisliste.Add($objekt)
         }
     } catch {
-        Write-Warning "Ein unerwarteter Fehler ist bei der Verarbeitung von $($datei.FullName) aufgetreten: $_"
+        Write-StructuredLog -LogLevel ERROR -SkriptName $SkriptName -Message "Ein unerwarteter Fehler ist aufgetreten: $($_.Exception.Message)" -FileObject $datei
     }
 }
 
-Write-Host "Verarbeitung abgeschlossen. Speichere Ergebnisse..." -ForegroundColor Green
+Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Verarbeitung abgeschlossen. Speichere Ergebnisse..."
 $ergebnisliste | Export-Csv -Path $Zieldatei_CSV -Delimiter ';' -NoTypeInformation -Encoding UTF8
-Write-Host "Fertig! Die Datei '$Zieldatei_CSV' wurde erfolgreich erstellt." -ForegroundColor Cyan
+Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Fertig! Die Datei '$Zieldatei_CSV' wurde erfolgreich erstellt."
+pause

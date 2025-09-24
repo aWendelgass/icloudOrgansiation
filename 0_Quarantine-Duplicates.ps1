@@ -23,32 +23,42 @@
 $DryRun = $false
 
 # --- Konfiguration ---
+$SkriptName = "Skript 0: Duplikat-Suche"
 $Arbeitsordner = $PSScriptRoot
 $QuarantineFolder = Join-Path -Path $Arbeitsordner -ChildPath "_DUPLICATES_TO_DELETE"
 $PlanFile = Join-Path -Path $Arbeitsordner -ChildPath "0_quarantine_plan.json"
 $mediaExtensions = @("*.jpg", "*.jpeg", "*.heic", "*.png", "*.mov", "*.mp4")
 
+# --- Lade Logging Modul ---
+try {
+    Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath "MediaWorkflowLogger.psm1")
+} catch {
+    Write-Host "FEHLER: Das Logging-Modul 'MediaWorkflowLogger.psm1' konnte nicht geladen werden." -ForegroundColor Red
+    pause
+    return
+}
+
 # --- Skript-Logik ---
 
 if ($DryRun) {
     # --- PHASE 1: ANALYSE ---
-    Write-Host "PHASE 1: ANALYSE - Suche nach Duplikaten und erstelle Aktionsplan." -ForegroundColor Yellow
+    Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "PHASE 1: ANALYSE - Suche nach Duplikaten und erstelle Aktionsplan."
 
-    Write-Host "Suche nach Mediendateien in '$Arbeitsordner'..." -ForegroundColor Green
+    Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Suche nach Mediendateien in '$Arbeitsordner'..."
     $allFiles = Get-ChildItem -Path $Arbeitsordner -Recurse -File -Include $mediaExtensions -Exclude "*\_DUPLICATES_TO_DELETE\*"
 
-    Write-Host "Es wurden $($allFiles.Count) Dateien gefunden."
-    Write-Host "Gruppiere Dateien nach Groesse und Typ, um Duplikate zu finden..."
+    Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Es wurden $($allFiles.Count) Dateien gefunden."
+    Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Gruppiere Dateien nach Groesse und Typ, um Duplikate zu finden..."
     $duplicateGroups = $allFiles | Group-Object -Property Length, Extension | Where-Object { $_.Count -gt 1 }
 
     if ($duplicateGroups.Count -eq 0) {
-        Write-Host "Keine Duplikate basierend auf Groesse und Typ gefunden." -ForegroundColor Green
+        Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Keine Duplikate basierend auf Groesse und Typ gefunden."
         if (Test-Path $PlanFile) { Remove-Item $PlanFile } # Alten Plan loeschen
         pause
         return
     }
 
-    Write-Host "Es wurden $($duplicateGroups.Count) Gruppen von moeglichen Duplikaten gefunden." -ForegroundColor Yellow
+    Write-StructuredLog -LogLevel WARN -SkriptName $SkriptName -Message "Es wurden $($duplicateGroups.Count) Gruppen von moeglichen Duplikaten gefunden."
     
     $actionPlan = [System.Collections.Generic.List[object]]::new()
 
@@ -60,17 +70,14 @@ if ($DryRun) {
         $originalBaseName = $originalFile.BaseName
         $originalExtension = $originalFile.Extension
 
-        # Aktion fuer das Original definieren (KOPIEREN)
         $quarantineOriginalName = "${originalBaseName}_original${originalExtension}"
         $quarantineOriginalPath = Join-Path -Path $QuarantineFolder -ChildPath $quarantineOriginalName
         $actionPlan.Add([PSCustomObject]@{
             Action = "Copy"
             Source = $originalFile.FullName
             Destination = $quarantineOriginalPath
-            OriginalName = $originalFile.FullName
         })
 
-        # Aktionen fuer die Duplikate definieren (VERSCHIEBEN)
         $counter = 1
         foreach ($dupFile in $duplicateFiles) {
             $quarantineDuplicateName = "${originalBaseName}_${counter}${originalExtension}"
@@ -79,31 +86,29 @@ if ($DryRun) {
                 Action = "Move"
                 Source = $dupFile.FullName
                 Destination = $quarantineDuplicatePath
-                OriginalName = $dupFile.FullName
             })
             $counter++
         }
     }
 
-    Write-Host "------------------------------------------------------------"
-    Write-Host "[SIMULATION] Die folgenden Aktionen wuerden ausgefuehrt:" -ForegroundColor Cyan
+    Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "------------------------------------------------------------"
+    Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "[SIMULATION] Die folgenden Aktionen wuerden ausgefuehrt:"
     $actionPlan | ForEach-Object {
-        Write-Host "$($_.Action) '$($_.Source)' nach '$($_.Destination)'"
+        Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "$($_.Action) '$($_.Source)' nach '$($_.Destination)'"
     }
-    Write-Host "------------------------------------------------------------"
+    Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "------------------------------------------------------------"
 
-    # Speichere den Plan als JSON-Datei
     $actionPlan | ConvertTo-Json -Depth 5 | Out-File -FilePath $PlanFile -Encoding UTF8
-    Write-Host "Aktionsplan wurde erfolgreich in '$PlanFile' gespeichert." -ForegroundColor Green
-    Write-Host "Um diese Aktionen auszufuehren, setzen Sie `$DryRun = `$false` und fuehren das Skript erneut aus."
+    Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Aktionsplan wurde erfolgreich in '$PlanFile' gespeichert."
+    Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Um diese Aktionen auszufuehren, setzen Sie `$DryRun = `$false` und fuehren das Skript erneut aus."
 
 } else {
     # --- PHASE 2: AUSFUEHRUNG ---
-    Write-Host "PHASE 2: AUSFUEHRUNG - Lese und verarbeite Aktionsplan." -ForegroundColor Yellow
+    Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "PHASE 2: AUSFUEHRUNG - Lese und verarbeite Aktionsplan."
 
     if (-not (Test-Path -Path $PlanFile)) {
-        Write-Host "FEHLER: Konnte keinen Aktionsplan ('$PlanFile') finden." -ForegroundColor Red
-        Write-Host "Bitte fuehren Sie das Skript zuerst im Analyse-Modus (`$DryRun = `$true`) aus." -ForegroundColor Red
+        Write-StructuredLog -LogLevel ERROR -SkriptName $SkriptName -Message "Konnte keinen Aktionsplan ('$PlanFile') finden."
+        Write-StructuredLog -LogLevel ERROR -SkriptName $SkriptName -Message "Bitte fuehren Sie das Skript zuerst im Analyse-Modus (`$DryRun = `$true`) aus."
         pause
         return
     }
@@ -111,39 +116,37 @@ if ($DryRun) {
     $actionPlan = Get-Content -Path $PlanFile | ConvertFrom-Json
     
     if ($actionPlan.Count -eq 0) {
-        Write-Host "Aktionsplan ist leer. Nichts zu tun." -ForegroundColor Green
+        Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Aktionsplan ist leer. Nichts zu tun."
         Remove-Item $PlanFile
         pause
         return
     }
 
-    Write-Host "Aktionsplan mit $($actionPlan.Count) Aktionen wird ausgefuehrt..."
+    Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Aktionsplan mit $($actionPlan.Count) Aktionen wird ausgefuehrt..."
 
-    # Erstelle den Quarantaene-Ordner, falls er nicht existiert
     if (-not (Test-Path -Path $QuarantineFolder)) {
         New-Item -Path $QuarantineFolder -ItemType Directory | Out-Null
     }
 
     foreach ($action in $actionPlan) {
         try {
-            Write-Host "$($action.Action) '$($action.Source)' nach '$($action.Destination)'" -ForegroundColor Magenta
+            Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "$($action.Action) '$($action.Source)' nach '$($action.Destination)'"
             if ($action.Action -eq "Copy") {
                 [System.IO.File]::Copy($action.Source, $action.Destination)
             } elseif ($action.Action -eq "Move") {
                 [System.IO.File]::Move($action.Source, $action.Destination)
             }
         } catch {
-            Write-Warning "FEHLER bei der Ausfuehrung der Aktion fuer '$($action.Source)': $($_.Exception.Message)"
+            Write-StructuredLog -LogLevel ERROR -SkriptName $SkriptName -Message "FEHLER bei der Ausfuehrung der Aktion fuer '$($action.Source)': $($_.Exception.Message)"
         }
     }
 
-    # Plan nach erfolgreicher Ausfuehrung loeschen
     Remove-Item $PlanFile
     
-    Write-Host "------------------------------------------------------------"
-    Write-Host "Alle Aktionen aus dem Plan wurden ausgefuehrt." -ForegroundColor Green
-    Write-Host "Alle gefundenen Duplikate wurden in den Ordner '$QuarantineFolder' verschoben/kopiert." -ForegroundColor Yellow
-    Write-Host "Bitte ueberpruefen Sie den Inhalt und loeschen Sie den Ordner manuell." -ForegroundColor Yellow
+    Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "------------------------------------------------------------"
+    Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Alle Aktionen aus dem Plan wurden ausgefuehrt."
+    Write-StructuredLog -LogLevel WARN -SkriptName $SkriptName -Message "Alle gefundenen Duplikate wurden in den Ordner '$QuarantineFolder' verschoben/kopiert."
+    Write-StructuredLog -LogLevel WARN -SkriptName $SkriptName -Message "Bitte ueberpruefen Sie den Inhalt und loeschen Sie den Ordner manuell."
 }
 
 pause
