@@ -11,6 +11,16 @@
 # Define the path for the central log file.
 $LogFilePath = Join-Path -Path $PSScriptRoot -ChildPath "media_workflow.log.csv"
 
+# --- Lade UTF8 Helper Modul ---
+try {
+    Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath "Utf8BomHelper.psm1")
+} catch {
+    Write-Host "FEHLER: Das UTF8 Helper Modul 'Utf8BomHelper.psm1' konnte nicht geladen werden." -ForegroundColor Red
+    pause
+    return
+}
+
+
 # --- Function Definition ---
 
 function Write-StructuredLog {
@@ -54,10 +64,16 @@ function Write-StructuredLog {
     # Check if the log file exists to write the header only once
     if (-not (Test-Path $LogFilePath)) {
         # Create the file and add the header
-        $logEntry | Export-Csv -Path $LogFilePath -NoTypeInformation -Delimiter ';' -Encoding UTF8
+        #  alt $logEntry | Export-Csv -Path $LogFilePath -NoTypeInformation -Delimiter ';' -Encoding UTF8
+        Export-CsvWithBom -Data $logEntry -Path $LogFilePath -Delimiter ';'
+
+
+
     } else {
         # Append without the header
-        $logEntry | Export-Csv -Path $LogFilePath -Append -NoTypeInformation -Delimiter ';' -Encoding UTF8
+        #alt:  $logEntry | Export-Csv -Path $LogFilePath -Append -NoTypeInformation -Delimiter ';' -Encoding UTF8
+        Export-CsvWithBom -Data $logEntry -Path $LogFilePath -Delimiter ';' -Append
+
     }
 }
 

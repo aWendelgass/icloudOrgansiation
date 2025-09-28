@@ -20,7 +20,7 @@
 #    $false = Ausfuehrungs-Modus: Fuehrt den zuvor erstellten Plan aus.
 #
 # WORKFLOW: Immer zuerst mit $true laufen lassen, dann auf $false aendern und erneut ausfuehren.
-$DryRun = $false
+$DryRun = $true
 
 # --- Konfiguration ---
 $SkriptName = "Skript 0: Duplikat-Suche"
@@ -38,6 +38,9 @@ try {
     return
 }
 
+# Setze Konsolen-Encoding auf UTF-8, um die Ausgabe von externen Tools korrekt zu lesen
+[System.Console]::InputEncoding = [System.Text.Encoding]::UTF8
+[System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 # --- Skript-Logik ---
 
 if ($DryRun) {

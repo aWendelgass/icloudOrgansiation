@@ -51,6 +51,9 @@ try {
     return
 }
 
+# Setze Konsolen-Encoding auf UTF-8, um die Ausgabe von externen Tools korrekt zu lesen
+[System.Console]::InputEncoding = [System.Text.Encoding]::UTF8
+[System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 # --- Skript-Logik ---
 
 Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Lese grosse Datendatei ein: $InputCsv_Full"

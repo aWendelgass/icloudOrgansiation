@@ -45,6 +45,15 @@ try {
     return
 }
 
+# --- Lade UTF8 Helper Modul ---
+try {
+    Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath "Utf8BomHelper.psm1")
+} catch {
+    Write-Host "FEHLER: Das UTF8 Helper Modul 'Utf8BomHelper.psm1' konnte nicht geladen werden." -ForegroundColor Red
+    pause
+    return
+}
+
 # --- Skript-Logik ---
 
 # Setze Konsolen-Encoding auf UTF-8, um die Ausgabe von externen Tools korrekt zu lesen
@@ -141,6 +150,9 @@ foreach ($datei in $dateien) {
 }
 
 Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Verarbeitung abgeschlossen. Speichere Ergebnisse..."
-$ergebnisliste | Export-Csv -Path $Zieldatei_CSV -Delimiter ';' -NoTypeInformation -Encoding UTF8
+
+# statt $ergebnisliste | Export-Csv -Path $Zieldatei_CSV -Delimiter ';' -NoTypeInformation -Encoding UTF8
+Export-CsvWithBom -Data $ergebnisliste -Path $Zieldatei_CSV -Delimiter ';'
+
 Write-StructuredLog -LogLevel INFO -SkriptName $SkriptName -Message "Fertig! Die Datei '$Zieldatei_CSV' wurde erfolgreich erstellt."
 pause
